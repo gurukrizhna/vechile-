@@ -19,8 +19,8 @@
         #video-container { position: relative; width: 100%; max-width: 100%; overflow: hidden; border-radius: 0.5rem; background: #000; }
         video { width: 100%; height: auto; display: block; }
         .scan-line {
-            position: absolute; width: 100%; height: 2px; background: #22c55e;
-            box-shadow: 0 0 10px #22c55e; top: 0; left: 0; display: none;
+            position: absolute; width: 100%; height: 2px; background: #3b82f6;
+            box-shadow: 0 0 15px #3b82f6, 0 0 5px #3b82f6; top: 0; left: 0; display: none;
             animation: scan 2s infinite linear;
         }
         @keyframes scan {
@@ -28,187 +28,303 @@
             50% { top: 100%; }
             100% { top: 0; }
         }
-        /* Loading spinner */
         .loader {
             border: 3px solid #334155; border-top: 3px solid #3b82f6; border-radius: 50%;
             width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Toggle Switch CSS */
+        .toggle-checkbox:checked { right: 0; border-color: #22c55e; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #22c55e; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
 
     <div class="max-w-6xl mx-auto space-y-6">
-        <!-- Header -->
-        <header class="flex items-center justify-between glass-panel p-4 rounded-xl">
+        <!-- Header & Navigation -->
+        <header class="flex flex-col md:flex-row items-center justify-between glass-panel p-4 rounded-xl gap-4">
             <div class="flex items-center space-x-3">
                 <i data-lucide="shield-check" class="text-blue-500 w-8 h-8"></i>
-                <h1 class="text-2xl font-bold tracking-tight">GateKeeper <span class="text-blue-500 font-medium text-lg">ALPR System</span></h1>
+                <h1 class="text-2xl font-bold tracking-tight">GateKeeper <span class="text-blue-500 font-medium text-lg">Auto-ALPR</span></h1>
             </div>
-            <div class="text-sm text-slate-400 flex items-center space-x-2">
+            
+            <!-- Navigation Tabs -->
+            <div class="flex bg-slate-800 p-1 rounded-lg">
+                <button id="nav-dashboard" class="px-4 py-2 rounded-md bg-blue-600 text-white font-medium text-sm transition-all flex items-center">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 mr-2"></i> Dashboard
+                </button>
+                <button id="nav-watchlist" class="px-4 py-2 rounded-md text-slate-400 hover:text-white font-medium text-sm transition-all flex items-center">
+                    <i data-lucide="database" class="w-4 h-4 mr-2"></i> Watchlist Manager
+                </button>
+            </div>
+
+            <div class="text-sm text-slate-400 flex items-center space-x-2 hidden md:flex">
                 <i data-lucide="clock" class="w-4 h-4"></i>
                 <span id="live-clock">00:00:00</span>
             </div>
         </header>
 
-        <!-- NEW: AI Analytics Dashboard -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-blue-500">
-                <div><p class="text-xs text-slate-400">Total Scans</p><p class="text-2xl font-bold" id="stat-total">0</p></div>
-                <i data-lucide="bar-chart" class="text-blue-500/50 w-8 h-8"></i>
-            </div>
-            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-green-500">
-                <div><p class="text-xs text-slate-400">VIP Vehicles</p><p class="text-2xl font-bold" id="stat-vip">0</p></div>
-                <i data-lucide="star" class="text-green-500/50 w-8 h-8"></i>
-            </div>
-            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-red-500">
-                <div><p class="text-xs text-slate-400">Threat Alerts</p><p class="text-2xl font-bold" id="stat-threat">0</p></div>
-                <i data-lucide="alert-triangle" class="text-red-500/50 w-8 h-8"></i>
-            </div>
-            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-purple-500">
-                <div><p class="text-xs text-slate-400">AI Status</p><p class="text-sm font-bold text-purple-400 flex items-center gap-1" id="ai-model-status"><span class="loader w-3 h-3 border-2 border-purple-500"></span> Loading...</p></div>
-                <i data-lucide="brain-circuit" class="text-purple-500/50 w-8 h-8"></i>
-            </div>
-        </div>
-
-        <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- VIEW 1: MAIN DASHBOARD -->
+        <div id="view-dashboard" class="space-y-6 block">
             
-            <!-- Left Column: Camera & Capture -->
-            <div class="lg:col-span-2 space-y-6">
-                <div class="glass-panel p-5 rounded-xl space-y-4">
-                    <div class="flex justify-between items-center mb-2">
-                        <h2 class="text-lg font-semibold flex items-center"><i data-lucide="camera" class="w-5 h-5 mr-2 text-slate-300"></i> Live Camera Feed</h2>
-                        <span id="camera-status" class="text-xs font-medium px-2 py-1 bg-red-500/20 text-red-400 rounded-full border border-red-500/30">Offline</span>
-                    </div>
-                    
-                    <div id="video-container" class="aspect-video relative border-2 border-slate-700">
-                        <video id="webcam" autoplay playsinline></video>
-                        <div class="scan-line" id="scan-line"></div>
-                        <!-- Overlay target box to guide the user -->
-                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div class="w-2/3 h-1/3 border-2 border-dashed border-blue-500/50 rounded-lg flex items-center justify-center">
-                                <span class="text-blue-500/50 text-sm font-semibold tracking-widest uppercase">Align Plate Here</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button id="capture-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg shadow-blue-500/20 transition-all flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i data-lucide="scan-line" class="w-5 h-5 mr-2"></i> Capture & Scan Plate
-                    </button>
-                    
-                    <!-- Hidden canvas to process the image -->
-                    <canvas id="canvas" class="hidden"></canvas>
+            <!-- AI Analytics Dashboard -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-blue-500">
+                    <div><p class="text-xs text-slate-400">Total Scans</p><p class="text-2xl font-bold" id="stat-total">0</p></div>
+                    <i data-lucide="bar-chart" class="text-blue-500/50 w-8 h-8"></i>
                 </div>
+                <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-green-500">
+                    <div><p class="text-xs text-slate-400">VIP Vehicles</p><p class="text-2xl font-bold" id="stat-vip">0</p></div>
+                    <i data-lucide="star" class="text-green-500/50 w-8 h-8"></i>
+                </div>
+                <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-red-500">
+                    <div><p class="text-xs text-slate-400">Threat Alerts</p><p class="text-2xl font-bold" id="stat-threat">0</p></div>
+                    <i data-lucide="alert-triangle" class="text-red-500/50 w-8 h-8"></i>
+                </div>
+                <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-purple-500">
+                    <div><p class="text-xs text-slate-400">AI Engine</p><p class="text-sm font-bold text-purple-400 flex items-center gap-1" id="ai-model-status"><span class="loader w-3 h-3 border-2 border-purple-500"></span> Loading...</p></div>
+                    <i data-lucide="brain-circuit" class="text-purple-500/50 w-8 h-8"></i>
+                </div>
+            </div>
 
-                <!-- Capture Preview & Manual Entry -->
-                <div class="glass-panel p-5 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-4 items-start hidden" id="processing-panel">
-                    <div>
-                        <h3 class="text-sm text-slate-400 mb-2">Captured Snapshot</h3>
-                        <img id="snapshot" class="w-full rounded border border-slate-600" src="" alt="Captured Frame">
-                    </div>
-                    <div class="space-y-4">
-                        <div>
-                            <h3 class="text-sm text-slate-400 mb-2">Detected License Plate</h3>
-                            <div id="ocr-status" class="text-xs text-blue-400 mb-2 hidden">
-                                <span class="loader mr-2"></span> Analyzing image using AI...
-                            </div>
-                            <input type="text" id="plate-input" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-xl font-mono text-center uppercase tracking-widest focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="WAITING...">
+            <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Left Column: Camera & Auto-Scan Panel -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="glass-panel p-5 rounded-xl space-y-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <h2 class="text-lg font-semibold flex items-center"><i data-lucide="camera" class="w-5 h-5 mr-2 text-slate-300"></i> Live Camera Feed</h2>
                             
-                            <!-- NEW: AI Analysis Results -->
-                            <div class="flex gap-2 mt-3">
-                                <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700 text-center">
-                                    <p class="text-[10px] text-slate-400 uppercase tracking-wider">Vehicle Type</p>
-                                    <p id="ai-vehicle-type" class="text-sm font-semibold text-slate-200">Detecting...</p>
-                                </div>
-                                <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700 text-center">
-                                    <p class="text-[10px] text-slate-400 uppercase tracking-wider">Threat Level</p>
-                                    <p id="ai-threat-level" class="text-sm font-semibold text-slate-200">Scanning...</p>
+                            <!-- AUTO SCAN TOGGLE -->
+                            <div class="flex items-center space-x-3 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                                <span class="text-sm font-medium text-slate-300" id="auto-scan-text">Auto-Scan: OFF</span>
+                                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" name="toggle" id="auto-scan-toggle" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out z-10"/>
+                                    <label for="auto-scan-toggle" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-600 cursor-pointer transition-all duration-300 ease-in-out"></label>
                                 </div>
                             </div>
-
-                            <p class="text-xs text-slate-500 mt-2">Edit manually if OCR missed characters.</p>
                         </div>
                         
-                        <button id="save-log-btn" class="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg shadow-lg shadow-green-500/20 transition-all flex justify-center items-center">
-                            <i data-lucide="check-circle" class="w-5 h-5 mr-2"></i> Save to Logbook
+                        <div id="video-container" class="aspect-video relative border-2 border-slate-700">
+                            <video id="webcam" autoplay playsinline></video>
+                            <div class="scan-line" id="scan-line"></div>
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div class="w-2/3 h-1/3 border-2 border-dashed border-blue-500/50 rounded-lg flex items-center justify-center">
+                                    <span class="text-blue-500/50 text-sm font-semibold tracking-widest uppercase bg-black/50 px-2 py-1 rounded">Target Area</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center text-xs text-slate-400">
+                            <span id="camera-status" class="px-2 py-1 bg-red-500/20 text-red-400 rounded-full border border-red-500/30">Camera Offline</span>
+                            <span id="scan-feedback">Standing by...</span>
+                        </div>
+                        
+                        <canvas id="canvas" class="hidden"></canvas>
+                        <!-- NEW: Hidden canvas used specifically for cropping and enhancing the plate area -->
+                        <canvas id="crop-canvas" class="hidden"></canvas>
+                    </div>
+
+                    <!-- Latest Scan Result Panel -->
+                    <div class="glass-panel p-5 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-4 items-start" id="latest-scan-panel">
+                        <div>
+                            <h3 class="text-sm text-slate-400 mb-2">Latest Detection</h3>
+                            <img id="snapshot" class="w-full rounded border border-slate-600 bg-slate-900 min-h-[150px] object-cover" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' ry='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpolyline points='21 15 16 10 5 21'/%3E%3C/svg%3E" alt="Waiting for scan...">
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-sm text-slate-400 mb-2">License Plate</h3>
+                                <div class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-xl font-mono text-center uppercase tracking-widest text-slate-200" id="plate-display">
+                                    WAITING...
+                                </div>
+                                
+                                <div class="flex gap-2 mt-3">
+                                    <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700 text-center">
+                                        <p class="text-[10px] text-slate-400 uppercase tracking-wider">Vehicle Type</p>
+                                        <p id="ai-vehicle-type" class="text-sm font-semibold text-slate-200">-</p>
+                                    </div>
+                                    <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700 text-center">
+                                        <p class="text-[10px] text-slate-400 uppercase tracking-wider">Threat Level</p>
+                                        <p id="ai-threat-level" class="text-sm font-semibold text-slate-200">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Logbook -->
+                <div class="glass-panel p-5 rounded-xl flex flex-col h-[650px]">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold flex items-center"><i data-lucide="clipboard-list" class="w-5 h-5 mr-2 text-slate-300"></i> Auto-Logbook</h2>
+                        <span id="log-count" class="bg-slate-700 text-xs px-2 py-1 rounded-md">0 Entries</span>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto pr-2 space-y-3" id="log-container">
+                        <div class="text-center text-slate-500 text-sm mt-10" id="empty-state">
+                            <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-50"></i>
+                            System armed. Waiting for vehicles.
+                        </div>
+                    </div>
+
+                    <div class="pt-4 mt-4 border-t border-slate-700">
+                        <button id="export-btn" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-all flex justify-center items-center">
+                            <i data-lucide="download" class="w-5 h-5 mr-2"></i> Download CSV Log
                         </button>
                     </div>
                 </div>
+            </main>
+        </div>
+
+        <!-- VIEW 2: WATCHLIST MANAGER -->
+        <div id="view-watchlist" class="glass-panel p-6 rounded-xl min-h-[600px] hidden">
+            <div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                <h2 class="text-2xl font-semibold flex items-center"><i data-lucide="database" class="w-6 h-6 mr-3 text-blue-500"></i> Pre-defined Plates Database</h2>
+                <span class="text-sm text-slate-400">Used for auto-flagging VIPs and Threats</span>
             </div>
 
-            <!-- Right Column: Logbook -->
-            <div class="glass-panel p-5 rounded-xl flex flex-col h-[600px]">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-semibold flex items-center"><i data-lucide="clipboard-list" class="w-5 h-5 mr-2 text-slate-300"></i> Entry Logs</h2>
-                    <span id="log-count" class="bg-slate-700 text-xs px-2 py-1 rounded-md">0 Entries</span>
-                </div>
-                
-                <div class="flex-1 overflow-y-auto pr-2 space-y-3" id="log-container">
-                    <!-- Logs will be injected here -->
-                    <div class="text-center text-slate-500 text-sm mt-10" id="empty-state">
-                        <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-50"></i>
-                        No vehicles logged yet.
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Add New Entry Form -->
+                <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700 h-fit">
+                    <h3 class="text-lg font-medium mb-4">Add to Watchlist</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">License Plate Number</label>
+                            <input type="text" id="wl-input-plate" class="w-full bg-slate-900 border border-slate-600 rounded p-2.5 font-mono uppercase focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. MH01AB1234">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Security Status</label>
+                            <select id="wl-input-status" class="w-full bg-slate-900 border border-slate-600 rounded p-2.5 outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="VIP">VIP (Authorized Access)</option>
+                                <option value="THREAT">THREAT (Do Not Allow)</option>
+                                <option value="STAFF">STAFF (Employee)</option>
+                            </select>
+                        </div>
+                        <button id="wl-add-btn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded shadow-lg transition-all flex justify-center items-center mt-2">
+                            <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add Plate
+                        </button>
                     </div>
                 </div>
 
-                <div class="pt-4 mt-4 border-t border-slate-700">
-                    <button id="export-btn" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-all flex justify-center items-center">
-                        <i data-lucide="download" class="w-5 h-5 mr-2"></i> Download Log (.txt)
-                    </button>
+                <!-- Database Table -->
+                <div class="md:col-span-2 bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-900/80 border-b border-slate-700 text-slate-300">
+                                <tr>
+                                    <th class="p-4 font-medium">Plate Number</th>
+                                    <th class="p-4 font-medium">Status Category</th>
+                                    <th class="p-4 font-medium text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wl-table-body" class="divide-y divide-slate-700/50">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
+        </div>
 
-        </main>
     </div>
 
     <script>
         // Initialize Icons
         lucide.createIcons();
 
-        // DOM Elements
+        // --- DOM Elements ---
         const video = document.getElementById('webcam');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const captureBtn = document.getElementById('capture-btn');
+        // NEW: Crop Canvas variables
+        const cropCanvas = document.getElementById('crop-canvas');
+        const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
+
         const scanLine = document.getElementById('scan-line');
         const cameraStatus = document.getElementById('camera-status');
-        const processingPanel = document.getElementById('processing-panel');
+        const scanFeedback = document.getElementById('scan-feedback');
+        
         const snapshotImg = document.getElementById('snapshot');
-        const ocrStatus = document.getElementById('ocr-status');
-        const plateInput = document.getElementById('plate-input');
-        const saveLogBtn = document.getElementById('save-log-btn');
+        const plateDisplay = document.getElementById('plate-display');
+        const aiVehicleType = document.getElementById('ai-vehicle-type');
+        const aiThreatLevel = document.getElementById('ai-threat-level');
+        
         const logContainer = document.getElementById('log-container');
         const emptyState = document.getElementById('empty-state');
         const logCountBadge = document.getElementById('log-count');
         const exportBtn = document.getElementById('export-btn');
         const liveClock = document.getElementById('live-clock');
-        
-        // NEW DOM Elements
-        const aiVehicleType = document.getElementById('ai-vehicle-type');
-        const aiThreatLevel = document.getElementById('ai-threat-level');
+        const autoScanToggle = document.getElementById('auto-scan-toggle');
+        const autoScanText = document.getElementById('auto-scan-text');
+
+        // Nav Elements
+        const navDashboard = document.getElementById('nav-dashboard');
+        const navWatchlist = document.getElementById('nav-watchlist');
+        const viewDashboard = document.getElementById('view-dashboard');
+        const viewWatchlist = document.getElementById('view-watchlist');
+
+        // Watchlist Elements
+        const wlTableBody = document.getElementById('wl-table-body');
+        const wlInputPlate = document.getElementById('wl-input-plate');
+        const wlInputStatus = document.getElementById('wl-input-status');
+        const wlAddBtn = document.getElementById('wl-add-btn');
+
+        // Dashboard Stats
         const statTotal = document.getElementById('stat-total');
         const statVip = document.getElementById('stat-vip');
         const statThreat = document.getElementById('stat-threat');
 
-        // State
+        // --- State Variables ---
         let logs = [];
         let streamActive = false;
         let vehicleModel = null;
+        let isAIReady = false;
         let stats = { total: 0, vip: 0, threat: 0 };
+        
+        // Auto-scan logic
+        let isAutoScanning = false;
+        let recentScans = {}; // Store { "PLATE": timestamp } to avoid duplicates
+        const SCAN_COOLDOWN_MS = 15000; // Don't log the same plate within 15 seconds
 
-        // --- NEW AI FEATURE: Watchlist Database ---
-        // Try testing with these plates to trigger the alarms
-        const watchlist = {
-            'BOSS01': 'VIP',
-            'CEO99': 'VIP',
-            'STOLENX': 'THREAT',
-            'BANNED4': 'THREAT'
-        };
+        // --- NEW: Dynamic Watchlist using LocalStorage ---
+        let watchlist = JSON.parse(localStorage.getItem('gatekeeper_watchlist'));
+        if (!watchlist) {
+            // Default sample data if nothing exists
+            watchlist = {
+                'BOSS01': 'VIP',
+                'CEO99': 'VIP',
+                'STOLENX': 'THREAT',
+                'BANNED4': 'THREAT'
+            };
+            saveWatchlist();
+        }
 
-        // --- NEW AI FEATURE: Voice Synthesizer ---
+        function saveWatchlist() {
+            localStorage.setItem('gatekeeper_watchlist', JSON.stringify(watchlist));
+        }
+
+        // --- NEW: Image Enhancement for OCR ---
+        // Converts the image to high-contrast black and white to remove glare and background noise
+        function preprocessForOCR(context, width, height) {
+            let imageData = context.getImageData(0, 0, width, height);
+            let data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                // Get grayscale value
+                let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                // Apply harsh threshold (makes text solid black, background solid white)
+                let threshold = avg > 110 ? 255 : 0; 
+                data[i] = threshold;     // Red
+                data[i + 1] = threshold; // Green
+                data[i + 2] = threshold; // Blue
+            }
+            context.putImageData(imageData, 0, 0);
+        }
+
+        // --- AI Voice Synthesizer ---
         function speakAlert(text) {
             if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel(); // Cancel ongoing speech
+                window.speechSynthesis.cancel(); 
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.rate = 1.0;
                 utterance.pitch = 1.1;
@@ -216,28 +332,40 @@
             }
         }
 
-        // --- NEW AI FEATURE: Load Object Detection Model (COCO-SSD) ---
+        // --- Load Models ---
         async function loadAIModels() {
             try {
                 vehicleModel = await cocoSsd.load();
+                
+                // Pre-warm Tesseract (makes first scan much faster)
+                scanFeedback.textContent = "Warming up OCR engine...";
+                await Tesseract.recognize(
+                    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', // 1x1 invisible pixel
+                    'eng'
+                );
+                
+                isAIReady = true;
                 const statusEl = document.getElementById('ai-model-status');
-                statusEl.innerHTML = 'Online';
+                statusEl.innerHTML = 'Online & Armed';
                 statusEl.classList.remove('text-purple-400');
                 statusEl.classList.add('text-green-400');
+                scanFeedback.textContent = "System Ready. Waiting for auto-scan trigger.";
+                
+                // If toggle was clicked while loading, start it now
+                if(autoScanToggle.checked) startAutoScanLoop();
+
             } catch (error) {
-                console.error("Failed to load AI Model", error);
+                console.error("Failed to load AI Models", error);
                 document.getElementById('ai-model-status').innerHTML = 'Offline (Error)';
                 document.getElementById('ai-model-status').classList.add('text-red-400');
+                scanFeedback.textContent = "AI Engine failed to load.";
             }
         }
 
         // Live Clock
-        setInterval(() => {
-            const now = new Date();
-            liveClock.textContent = now.toLocaleTimeString();
-        }, 1000);
+        setInterval(() => { liveClock.textContent = new Date().toLocaleTimeString(); }, 1000);
 
-        // Start Camera
+        // --- Camera Setup ---
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -247,145 +375,169 @@
                 streamActive = true;
                 
                 cameraStatus.textContent = "Online";
-                cameraStatus.className = "text-xs font-medium px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/30";
-                captureBtn.disabled = false;
+                cameraStatus.className = "px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/30 text-xs";
             } catch (err) {
                 console.error("Camera access denied or error:", err);
                 cameraStatus.textContent = "Error / Denied";
-                alert("Please allow camera access to use the scanner.");
+                scanFeedback.textContent = "Check camera permissions.";
             }
         }
 
-        // Capture and Scan logic
-        captureBtn.addEventListener('click', async () => {
-            if (!streamActive) return;
-
-            // UI feedback
-            scanLine.style.display = 'block';
-            captureBtn.disabled = true;
-            processingPanel.classList.remove('hidden');
-            plateInput.value = '';
-            ocrStatus.classList.remove('hidden');
-            aiVehicleType.textContent = 'Detecting...';
-            aiThreatLevel.innerHTML = '<span class="text-slate-400">Scanning...</span>';
-
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const processDataUrl = canvas.toDataURL('image/jpeg');
-            snapshotImg.src = processDataUrl;
-
-            // --- AI PROCESS 1: Vehicle Type Detection ---
-            let detectedVehicleType = "Unknown Vehicle";
-            if (vehicleModel) {
-                try {
-                    const predictions = await vehicleModel.detect(canvas);
-                    const vehicleClasses = ['car', 'truck', 'motorcycle', 'bus'];
-                    const vehicles = predictions.filter(p => vehicleClasses.includes(p.class));
-                    
-                    if (vehicles.length > 0) {
-                        vehicles.sort((a, b) => b.score - a.score);
-                        detectedVehicleType = vehicles[0].class.charAt(0).toUpperCase() + vehicles[0].class.slice(1);
-                    } else {
-                        detectedVehicleType = "No Vehicle Found";
-                    }
-                } catch (e) {
-                    console.error("TFJS error:", e);
+        // --- AUTO-SCAN ENGINE ---
+        
+        autoScanToggle.addEventListener('change', (e) => {
+            isAutoScanning = e.target.checked;
+            if (isAutoScanning) {
+                autoScanText.textContent = "Auto-Scan: ON";
+                autoScanText.classList.add("text-green-400");
+                if(isAIReady && streamActive) {
+                    startAutoScanLoop();
+                } else if (!isAIReady) {
+                    scanFeedback.textContent = "Waiting for AI to initialize...";
                 }
-            }
-            aiVehicleType.textContent = detectedVehicleType;
-
-            // --- AI PROCESS 2: Plate OCR ---
-            try {
-                const result = await Tesseract.recognize(
-                    processDataUrl,
-                    'eng',
-                    { tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' }
-                );
-
-                let detectedText = result.data.text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-                
-                if (detectedText.length === 0) {
-                    plateInput.value = "NOT DETECTED";
-                    speakAlert(`Scan failed. ${detectedVehicleType} detected, but no plate found.`);
-                } else {
-                    plateInput.value = detectedText;
-                    
-                    // --- AI PROCESS 3: Threat / Watchlist Assessment ---
-                    let threatStatus = 'CLEARED';
-                    let statusColor = 'text-green-400';
-                    
-                    if (watchlist[detectedText]) {
-                        threatStatus = watchlist[detectedText];
-                        if (threatStatus === 'VIP') statusColor = 'text-blue-400';
-                        if (threatStatus === 'THREAT') statusColor = 'text-red-500';
-                    }
-                    
-                    aiThreatLevel.innerHTML = `<span class="${statusColor} font-bold">${threatStatus}</span>`;
-                    
-                    // Voice Alert
-                    let voiceMessage = `${detectedVehicleType} scanned. Plate ending in ${detectedText.slice(-3)}. Status: ${threatStatus.toLowerCase()}.`;
-                    if (threatStatus === 'THREAT') {
-                        voiceMessage = `Warning! Threat vehicle detected. Do not open gate. Plate: ${detectedText}.`;
-                    }
-                    speakAlert(voiceMessage);
-                }
-
-            } catch (err) {
-                console.error("OCR Error:", err);
-                plateInput.value = "OCR FAILED";
-            } finally {
+            } else {
+                autoScanText.textContent = "Auto-Scan: OFF";
+                autoScanText.classList.remove("text-green-400");
                 scanLine.style.display = 'none';
-                captureBtn.disabled = false;
-                ocrStatus.classList.add('hidden');
+                scanFeedback.textContent = "Auto-scan paused.";
             }
         });
 
-        // Save Log
-        saveLogBtn.addEventListener('click', () => {
-            const plate = plateInput.value.trim();
-            if (!plate || plate === "WAITING..." || plate === "NOT DETECTED" || plate === "OCR FAILED") {
-                alert("Please enter a valid license plate number before saving.");
-                return;
+        async function startAutoScanLoop() {
+            if (!isAutoScanning || !streamActive || !isAIReady) return;
+
+            // Draw current video frame to hidden canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            scanFeedback.textContent = "Looking for vehicles...";
+
+            try {
+                // Step 1: Detect if a vehicle is in frame
+                const predictions = await vehicleModel.detect(canvas);
+                const vehicleClasses = ['car', 'truck', 'motorcycle', 'bus'];
+                const detectedVehicles = predictions.filter(p => vehicleClasses.includes(p.class));
+
+                if (detectedVehicles.length > 0) {
+                    scanFeedback.textContent = "Vehicle detected! Scanning target area...";
+                    scanLine.style.display = 'block';
+                    
+                    // Grab best prediction
+                    detectedVehicles.sort((a, b) => b.score - a.score);
+                    const vClass = detectedVehicles[0].class;
+                    const vehicleType = vClass.charAt(0).toUpperCase() + vClass.slice(1);
+                    
+                    // --- NEW: STEP 2 - Crop to the UI Target Box area (Center 66% width, 33% height) ---
+                    const targetWidth = canvas.width * 0.66;
+                    const targetHeight = canvas.height * 0.33;
+                    const targetX = (canvas.width - targetWidth) / 2;
+                    const targetY = (canvas.height - targetHeight) / 2;
+
+                    cropCanvas.width = targetWidth;
+                    cropCanvas.height = targetHeight;
+                    
+                    // Draw ONLY the target box area onto the crop canvas
+                    cropCtx.drawImage(canvas, targetX, targetY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
+                    
+                    // Apply black and white contrast filter
+                    preprocessForOCR(cropCtx, targetWidth, targetHeight);
+
+                    // Show the cropped, high-contrast frame in the UI so the user sees exactly what the AI sees
+                    const processDataUrl = cropCanvas.toDataURL('image/jpeg', 1.0);
+                    snapshotImg.src = processDataUrl;
+
+                    // --- NEW: STEP 3 - Run OCR ONLY on the cropped, filtered image ---
+                    const result = await Tesseract.recognize(
+                        processDataUrl,
+                        'eng',
+                        { tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' }
+                    );
+
+                    let detectedText = result.data.text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                    
+                    // --- NEW: STEP 4 - Stricter Validation ---
+                    // Must be between 5 and 10 characters AND contain at least one number AND one letter
+                    const hasLetters = /[A-Z]/.test(detectedText);
+                    const hasNumbers = /[0-9]/.test(detectedText);
+                    const isValidLength = detectedText.length >= 5 && detectedText.length <= 10;
+
+                    if (isValidLength && hasLetters && hasNumbers) {
+                        const now = Date.now();
+                        
+                        // Check cooldown. Have we logged this exact plate recently?
+                        if (!recentScans[detectedText] || (now - recentScans[detectedText] > SCAN_COOLDOWN_MS)) {
+                            recentScans[detectedText] = now; // Update timestamp
+                            processAndLogEntry(detectedText, vehicleType);
+                        } else {
+                            scanFeedback.textContent = `Plate ${detectedText} already logged recently.`;
+                        }
+                    } else {
+                        scanFeedback.textContent = `No valid plate formatting found (${detectedText || 'Empty'}). Ensure plate is inside the box.`;
+                    }
+                    scanLine.style.display = 'none';
+                }
+            } catch (err) {
+                console.error("Auto-Scan Error:", err);
             }
 
-            const now = new Date();
-            const currentThreatSpan = aiThreatLevel.querySelector('span');
-            const currentThreat = currentThreatSpan ? currentThreatSpan.innerText : 'CLEARED';
-            const currentVehicle = aiVehicleType.innerText;
+            // Loop again after 2 seconds to save CPU
+            if (isAutoScanning) {
+                setTimeout(startAutoScanLoop, 2000);
+            }
+        }
 
+        // --- Core Logging Function ---
+        function processAndLogEntry(plate, vehicleType) {
+            // Check Watchlist
+            let threatStatus = 'CLEARED';
+            let statusColor = 'text-green-400';
+            
+            if (watchlist[plate]) {
+                threatStatus = watchlist[plate];
+                if (threatStatus === 'VIP') statusColor = 'text-blue-400';
+                if (threatStatus === 'THREAT') statusColor = 'text-red-500';
+                if (threatStatus === 'STAFF') statusColor = 'text-yellow-400';
+            }
+            
+            // Update Dashboard Preview UI
+            plateDisplay.textContent = plate;
+            aiVehicleType.textContent = vehicleType;
+            aiThreatLevel.innerHTML = `<span class="${statusColor} font-bold">${threatStatus}</span>`;
+            
+            // Generate Log Entry
+            const now = new Date();
             const logEntry = {
                 id: Date.now().toString(),
                 plate: plate,
-                vehicle: currentVehicle,
-                status: currentThreat,
+                vehicle: vehicleType,
+                status: threatStatus,
                 date: now.toLocaleDateString(),
-                time: now.toLocaleTimeString(),
-                timestampRaw: now.toISOString()
+                time: now.toLocaleTimeString()
             };
 
             logs.unshift(logEntry); 
             
-            // Update Dashboard Stats
+            // Update Stats
             stats.total++;
-            if (currentThreat === 'VIP') stats.vip++;
-            if (currentThreat === 'THREAT') stats.threat++;
+            if (threatStatus === 'VIP') stats.vip++;
+            if (threatStatus === 'THREAT') stats.threat++;
             
             statTotal.textContent = stats.total;
             statVip.textContent = stats.vip;
             statThreat.textContent = stats.threat;
 
-            updateLogUI();
-            
-            processingPanel.classList.add('hidden');
-            plateInput.value = '';
-            
-            // Reload icons in newly rendered HTML
-            lucide.createIcons();
-        });
+            // Trigger Voice Alert
+            let voiceMessage = `${vehicleType} logged. Plate ${plate}. Status: ${threatStatus.toLowerCase()}.`;
+            if (threatStatus === 'THREAT') {
+                voiceMessage = `Security Alert! Threat vehicle detected. Do not open gate. Plate: ${plate}.`;
+            }
+            speakAlert(voiceMessage);
 
-        // Update Log UI
+            // Re-render Log UI
+            updateLogUI();
+        }
+
         function updateLogUI() {
             if (logs.length > 0) emptyState.style.display = 'none';
             logCountBadge.textContent = `${logs.length} Entries`;
@@ -394,6 +546,7 @@
                 let badgeClass = 'bg-slate-700 text-slate-300';
                 if (log.status === 'VIP') badgeClass = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
                 if (log.status === 'THREAT') badgeClass = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                if (log.status === 'STAFF') badgeClass = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
                 
                 return `
                 <div class="bg-slate-800/50 border border-slate-700 p-3 rounded-lg flex justify-between items-center transition-all hover:bg-slate-800">
@@ -414,48 +567,103 @@
                     </div>
                 </div>
             `}).join('');
+            
+            lucide.createIcons();
         }
 
-        // Export Log to TXT Document
-        exportBtn.addEventListener('click', () => {
-            if (logs.length === 0) {
-                alert("No logs to export!");
-                return;
+        // --- WATCHLIST MANAGEMENT UI ---
+        
+        function renderWatchlist() {
+            wlTableBody.innerHTML = '';
+            for (const [plate, status] of Object.entries(watchlist)) {
+                
+                let badgeClass = 'bg-slate-700 text-slate-300';
+                if (status === 'VIP') badgeClass = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+                if (status === 'THREAT') badgeClass = 'bg-red-500/20 text-red-400 border-red-500/30';
+                if (status === 'STAFF') badgeClass = 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-4 font-mono font-bold">${plate}</td>
+                    <td class="p-4"><span class="px-2 py-1 rounded text-xs border ${badgeClass}">${status}</span></td>
+                    <td class="p-4 text-right">
+                        <button onclick="deleteFromWatchlist('${plate}')" class="text-slate-400 hover:text-red-400 transition-colors p-1" title="Delete">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                wlTableBody.appendChild(tr);
             }
+            lucide.createIcons();
+        }
 
-            let fileContent = "GATEKEEPER AI SECURITY LOG\n";
-            fileContent += "==============================================================\n";
-            fileContent += "DATE       | TIME       | PLATE      | TYPE       | STATUS    \n";
-            fileContent += "==============================================================\n";
+        wlAddBtn.addEventListener('click', () => {
+            const plate = wlInputPlate.value.trim().toUpperCase().replace(/[^A-Z0-9]/gi, '');
+            const status = wlInputStatus.value;
             
+            if (!plate) return alert("Please enter a valid plate number.");
+            
+            watchlist[plate] = status;
+            saveWatchlist();
+            renderWatchlist();
+            
+            wlInputPlate.value = ''; // clear
+            alert(`Added ${plate} to Watchlist as ${status}`);
+        });
+
+        window.deleteFromWatchlist = function(plate) {
+            if (confirm(`Remove ${plate} from the watchlist?`)) {
+                delete watchlist[plate];
+                saveWatchlist();
+                renderWatchlist();
+            }
+        };
+
+        // --- Navigation ---
+        navDashboard.addEventListener('click', () => {
+            viewDashboard.classList.remove('hidden');
+            viewWatchlist.classList.add('hidden');
+            navDashboard.classList.add('bg-blue-600', 'text-white');
+            navDashboard.classList.remove('text-slate-400');
+            navWatchlist.classList.remove('bg-blue-600', 'text-white');
+            navWatchlist.classList.add('text-slate-400');
+        });
+
+        navWatchlist.addEventListener('click', () => {
+            viewDashboard.classList.add('hidden');
+            viewWatchlist.classList.remove('hidden');
+            navWatchlist.classList.add('bg-blue-600', 'text-white');
+            navWatchlist.classList.remove('text-slate-400');
+            navDashboard.classList.remove('bg-blue-600', 'text-white');
+            navDashboard.classList.add('text-slate-400');
+            renderWatchlist(); // Ensure it's up to date
+        });
+
+        // --- Export to CSV ---
+        exportBtn.addEventListener('click', () => {
+            if (logs.length === 0) return alert("No logs to export!");
+
+            let fileContent = "Date,Time,Plate,VehicleType,Status\n";
             logs.forEach(log => {
-                const paddedDate = log.date.padEnd(10, ' ');
-                const paddedTime = log.time.padEnd(10, ' ');
-                const paddedPlate = log.plate.padEnd(10, ' ');
-                const paddedType = log.vehicle.substring(0, 10).padEnd(10, ' ');
-                fileContent += `${paddedDate} | ${paddedTime} | ${paddedPlate} | ${paddedType} | ${log.status}\n`;
+                fileContent += `${log.date},${log.time},${log.plate},${log.vehicle},${log.status}\n`;
             });
-            
-            fileContent += "==============================================================\n";
-            fileContent += `Total: ${stats.total} | VIPs: ${stats.vip} | Threats: ${stats.threat}\n`;
-            fileContent += `Export Generated: ${new Date().toLocaleString()}\n`;
 
-            const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });
+            const blob = new Blob([fileContent], { type: "text/csv;charset=utf-8" });
             const url = URL.createObjectURL(blob);
-            
             const a = document.createElement('a');
             a.href = url;
-            a.download = `security_log_ai_${new Date().toISOString().split('T')[0]}.txt`;
+            a.download = `auto_alpr_log_${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
 
-        // Initialize
+        // --- Initialization ---
         window.onload = () => {
             startCamera();
-            loadAIModels(); // Start loading AI engine immediately
+            loadAIModels();
+            renderWatchlist();
         };
 
     </script>
