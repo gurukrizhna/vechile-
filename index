@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GateKeeper - Security Log System</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tesseract.js for OCR (Optical Character Recognition) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- TensorFlow.js & COCO-SSD for AI Vehicle Detection -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        #video-container { position: relative; width: 100%; max-width: 100%; overflow: hidden; border-radius: 0.5rem; background: #000; }
+        video { width: 100%; height: auto; display: block; }
+        .scan-line {
+            position: absolute; width: 100%; height: 2px; background: #22c55e;
+            box-shadow: 0 0 10px #22c55e; top: 0; left: 0; display: none;
+            animation: scan 2s infinite linear;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+        }
+        /* Loading spinner */
+        .loader {
+            border: 3px solid #334155; border-top: 3px solid #3b82f6; border-radius: 50%;
+            width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        <!-- Header -->
+        <header class="flex items-center justify-between glass-panel p-4 rounded-xl">
+            <div class="flex items-center space-x-3">
+                <i data-lucide="shield-check" class="text-blue-500 w-8 h-8"></i>
+                <h1 class="text-2xl font-bold tracking-tight">GateKeeper <span class="text-blue-500 font-medium text-lg">ALPR System</span></h1>
+            </div>
+            <div class="text-sm text-slate-400 flex items-center space-x-2">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+                <span id="live-clock">00:00:00</span>
+            </div>
+        </header>
+
+        <!-- NEW: AI Analytics Dashboard -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-blue-500">
+                <div><p class="text-xs text-slate-400">Total Scans</p><p class="text-2xl font-bold" id="stat-total">0</p></div>
+                <i data-lucide="bar-chart" class="text-blue-500/50 w-8 h-8"></i>
+            </div>
+            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-green-500">
+                <div><p class="text-xs text-slate-400">VIP Vehicles</p><p class="text-2xl font-bold" id="stat-vip">0</p></div>
+                <i data-lucide="star" class="text-green-500/50 w-8 h-8"></i>
+            </div>
+            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-red-500">
+                <div><p class="text-xs text-slate-400">Threat Alerts</p><p class="text-2xl font-bold" id="stat-threat">0</p></div>
+                <i data-lucide="alert-triangle" class="text-red-500/50 w-8 h-8"></i>
+            </div>
+            <div class="glass-panel p-4 rounded-xl flex items-center justify-between border-l-4 border-purple-500">
+                <div><p class="text-xs text-slate-400">AI Status</p><p class="text-sm font-bold text-purple-400 flex items-center gap-1" id="ai-model-status"><span class="loader w-3 h-3 border-2 border-purple-500"></span> Loading...</p></div>
+                <i data-lucide="brain-circuit" class="text-purple-500/50 w-8 h-8"></i>
+            </div>
+        </div>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Column: Camera & Capture -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="glass-panel p-5 rounded-xl space-y-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold flex items-center"><i data-lucide="camera" class="w-5 h-5 mr-2 text-slate-300"></i> Live Camera Feed</h2>
+                        <span id="camera-status" class="text-xs font-medium px-2 py-1 bg-red-500/20 text-red-400 rounded-full border border-red-500/30">Offline</span>
+                    </div>
+                    
+                    <div id="video-container" class="aspect-video relative border-2 border-slate-700">
+                        <video id="webcam" autoplay playsinline></video>
+                        <div class="scan-line" id="scan-line"></div>
+                        <!-- Overlay target box to guide the user -->
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div class="w-2/3 h-1/3 border-2 border-dashed border-blue-500/50 rounded-lg flex items-center justify-center">
+                                <span class="text-blue-500/50 text-sm font-semibold tracking-widest uppercase">Align Plate Here</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button id="capture-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg shadow-blue-500/20 transition-all flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="scan-line" class="w-5 h-5 mr-2"></i> Capture & Scan Plate
+                    </button>
+                    
+                    <!-- Hidden canvas to process the image -->
+                    <canvas id="canvas" class="hidden"></canvas>
+                </div>
+
+                <!-- Capture Preview & Manual Entry -->
+                <div class="glass-panel p-5 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-4 items-start hidden" id="processing-panel">
+                    <div>
+                        <h3 class="text-sm text-slate-400 mb-2">Captured Snapshot</h3>
+                        <img id="snapshot" class="w-full rounded border border-slate-600" src="" alt="Captured Frame">
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="text-sm text-slate-400 mb-2">Detected License Plate</h3>
+                            <div id="ocr-status" class="text-xs text-blue-400 mb-2 hidden">
+                                <span class="loader mr-2"></span> Analyzing image using AI...
+                            </div>
+                            <input type="text" id="plate-input" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-xl font-mono text-center uppercase tracking-widest focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="WAITING...">
+                            
+                            <!-- NEW: AI Analysis Results -->
+                            <div class="flex gap-2 mt-3">
+                                <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700 text-center">
+                                    <p class="text-[10px] text-slate-400 uppercase tracking-wider">Vehicle Type</p>
+                                    <p id="ai-vehicle-type" class="text-sm font-semibold text-slate-200">Detecting...</p>
+                                </div>
+                                <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700 text-center">
+                                    <p class="text-[10px] text-slate-400 uppercase tracking-wider">Threat Level</p>
+                                    <p id="ai-threat-level" class="text-sm font-semibold text-slate-200">Scanning...</p>
+                                </div>
+                            </div>
+
+                            <p class="text-xs text-slate-500 mt-2">Edit manually if OCR missed characters.</p>
+                        </div>
+                        
+                        <button id="save-log-btn" class="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg shadow-lg shadow-green-500/20 transition-all flex justify-center items-center">
+                            <i data-lucide="check-circle" class="w-5 h-5 mr-2"></i> Save to Logbook
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Logbook -->
+            <div class="glass-panel p-5 rounded-xl flex flex-col h-[600px]">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold flex items-center"><i data-lucide="clipboard-list" class="w-5 h-5 mr-2 text-slate-300"></i> Entry Logs</h2>
+                    <span id="log-count" class="bg-slate-700 text-xs px-2 py-1 rounded-md">0 Entries</span>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto pr-2 space-y-3" id="log-container">
+                    <!-- Logs will be injected here -->
+                    <div class="text-center text-slate-500 text-sm mt-10" id="empty-state">
+                        <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-2 opacity-50"></i>
+                        No vehicles logged yet.
+                    </div>
+                </div>
+
+                <div class="pt-4 mt-4 border-t border-slate-700">
+                    <button id="export-btn" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-all flex justify-center items-center">
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i> Download Log (.txt)
+                    </button>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // DOM Elements
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const captureBtn = document.getElementById('capture-btn');
+        const scanLine = document.getElementById('scan-line');
+        const cameraStatus = document.getElementById('camera-status');
+        const processingPanel = document.getElementById('processing-panel');
+        const snapshotImg = document.getElementById('snapshot');
+        const ocrStatus = document.getElementById('ocr-status');
+        const plateInput = document.getElementById('plate-input');
+        const saveLogBtn = document.getElementById('save-log-btn');
+        const logContainer = document.getElementById('log-container');
+        const emptyState = document.getElementById('empty-state');
+        const logCountBadge = document.getElementById('log-count');
+        const exportBtn = document.getElementById('export-btn');
+        const liveClock = document.getElementById('live-clock');
+        
+        // NEW DOM Elements
+        const aiVehicleType = document.getElementById('ai-vehicle-type');
+        const aiThreatLevel = document.getElementById('ai-threat-level');
+        const statTotal = document.getElementById('stat-total');
+        const statVip = document.getElementById('stat-vip');
+        const statThreat = document.getElementById('stat-threat');
+
+        // State
+        let logs = [];
+        let streamActive = false;
+        let vehicleModel = null;
+        let stats = { total: 0, vip: 0, threat: 0 };
+
+        // --- NEW AI FEATURE: Watchlist Database ---
+        // Try testing with these plates to trigger the alarms
+        const watchlist = {
+            'BOSS01': 'VIP',
+            'CEO99': 'VIP',
+            'STOLENX': 'THREAT',
+            'BANNED4': 'THREAT'
+        };
+
+        // --- NEW AI FEATURE: Voice Synthesizer ---
+        function speakAlert(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // Cancel ongoing speech
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.1;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // --- NEW AI FEATURE: Load Object Detection Model (COCO-SSD) ---
+        async function loadAIModels() {
+            try {
+                vehicleModel = await cocoSsd.load();
+                const statusEl = document.getElementById('ai-model-status');
+                statusEl.innerHTML = 'Online';
+                statusEl.classList.remove('text-purple-400');
+                statusEl.classList.add('text-green-400');
+            } catch (error) {
+                console.error("Failed to load AI Model", error);
+                document.getElementById('ai-model-status').innerHTML = 'Offline (Error)';
+                document.getElementById('ai-model-status').classList.add('text-red-400');
+            }
+        }
+
+        // Live Clock
+        setInterval(() => {
+            const now = new Date();
+            liveClock.textContent = now.toLocaleTimeString();
+        }, 1000);
+
+        // Start Camera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+                });
+                video.srcObject = stream;
+                streamActive = true;
+                
+                cameraStatus.textContent = "Online";
+                cameraStatus.className = "text-xs font-medium px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/30";
+                captureBtn.disabled = false;
+            } catch (err) {
+                console.error("Camera access denied or error:", err);
+                cameraStatus.textContent = "Error / Denied";
+                alert("Please allow camera access to use the scanner.");
+            }
+        }
+
+        // Capture and Scan logic
+        captureBtn.addEventListener('click', async () => {
+            if (!streamActive) return;
+
+            // UI feedback
+            scanLine.style.display = 'block';
+            captureBtn.disabled = true;
+            processingPanel.classList.remove('hidden');
+            plateInput.value = '';
+            ocrStatus.classList.remove('hidden');
+            aiVehicleType.textContent = 'Detecting...';
+            aiThreatLevel.innerHTML = '<span class="text-slate-400">Scanning...</span>';
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const processDataUrl = canvas.toDataURL('image/jpeg');
+            snapshotImg.src = processDataUrl;
+
+            // --- AI PROCESS 1: Vehicle Type Detection ---
+            let detectedVehicleType = "Unknown Vehicle";
+            if (vehicleModel) {
+                try {
+                    const predictions = await vehicleModel.detect(canvas);
+                    const vehicleClasses = ['car', 'truck', 'motorcycle', 'bus'];
+                    const vehicles = predictions.filter(p => vehicleClasses.includes(p.class));
+                    
+                    if (vehicles.length > 0) {
+                        vehicles.sort((a, b) => b.score - a.score);
+                        detectedVehicleType = vehicles[0].class.charAt(0).toUpperCase() + vehicles[0].class.slice(1);
+                    } else {
+                        detectedVehicleType = "No Vehicle Found";
+                    }
+                } catch (e) {
+                    console.error("TFJS error:", e);
+                }
+            }
+            aiVehicleType.textContent = detectedVehicleType;
+
+            // --- AI PROCESS 2: Plate OCR ---
+            try {
+                const result = await Tesseract.recognize(
+                    processDataUrl,
+                    'eng',
+                    { tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' }
+                );
+
+                let detectedText = result.data.text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                
+                if (detectedText.length === 0) {
+                    plateInput.value = "NOT DETECTED";
+                    speakAlert(`Scan failed. ${detectedVehicleType} detected, but no plate found.`);
+                } else {
+                    plateInput.value = detectedText;
+                    
+                    // --- AI PROCESS 3: Threat / Watchlist Assessment ---
+                    let threatStatus = 'CLEARED';
+                    let statusColor = 'text-green-400';
+                    
+                    if (watchlist[detectedText]) {
+                        threatStatus = watchlist[detectedText];
+                        if (threatStatus === 'VIP') statusColor = 'text-blue-400';
+                        if (threatStatus === 'THREAT') statusColor = 'text-red-500';
+                    }
+                    
+                    aiThreatLevel.innerHTML = `<span class="${statusColor} font-bold">${threatStatus}</span>`;
+                    
+                    // Voice Alert
+                    let voiceMessage = `${detectedVehicleType} scanned. Plate ending in ${detectedText.slice(-3)}. Status: ${threatStatus.toLowerCase()}.`;
+                    if (threatStatus === 'THREAT') {
+                        voiceMessage = `Warning! Threat vehicle detected. Do not open gate. Plate: ${detectedText}.`;
+                    }
+                    speakAlert(voiceMessage);
+                }
+
+            } catch (err) {
+                console.error("OCR Error:", err);
+                plateInput.value = "OCR FAILED";
+            } finally {
+                scanLine.style.display = 'none';
+                captureBtn.disabled = false;
+                ocrStatus.classList.add('hidden');
+            }
+        });
+
+        // Save Log
+        saveLogBtn.addEventListener('click', () => {
+            const plate = plateInput.value.trim();
+            if (!plate || plate === "WAITING..." || plate === "NOT DETECTED" || plate === "OCR FAILED") {
+                alert("Please enter a valid license plate number before saving.");
+                return;
+            }
+
+            const now = new Date();
+            const currentThreatSpan = aiThreatLevel.querySelector('span');
+            const currentThreat = currentThreatSpan ? currentThreatSpan.innerText : 'CLEARED';
+            const currentVehicle = aiVehicleType.innerText;
+
+            const logEntry = {
+                id: Date.now().toString(),
+                plate: plate,
+                vehicle: currentVehicle,
+                status: currentThreat,
+                date: now.toLocaleDateString(),
+                time: now.toLocaleTimeString(),
+                timestampRaw: now.toISOString()
+            };
+
+            logs.unshift(logEntry); 
+            
+            // Update Dashboard Stats
+            stats.total++;
+            if (currentThreat === 'VIP') stats.vip++;
+            if (currentThreat === 'THREAT') stats.threat++;
+            
+            statTotal.textContent = stats.total;
+            statVip.textContent = stats.vip;
+            statThreat.textContent = stats.threat;
+
+            updateLogUI();
+            
+            processingPanel.classList.add('hidden');
+            plateInput.value = '';
+            
+            // Reload icons in newly rendered HTML
+            lucide.createIcons();
+        });
+
+        // Update Log UI
+        function updateLogUI() {
+            if (logs.length > 0) emptyState.style.display = 'none';
+            logCountBadge.textContent = `${logs.length} Entries`;
+
+            logContainer.innerHTML = logs.map(log => {
+                let badgeClass = 'bg-slate-700 text-slate-300';
+                if (log.status === 'VIP') badgeClass = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                if (log.status === 'THREAT') badgeClass = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                
+                return `
+                <div class="bg-slate-800/50 border border-slate-700 p-3 rounded-lg flex justify-between items-center transition-all hover:bg-slate-800">
+                    <div class="flex flex-col">
+                        <div class="flex items-center space-x-2">
+                            <div class="bg-slate-900 px-3 py-1.5 rounded border border-slate-600 text-lg font-mono font-bold tracking-wider text-slate-200">
+                                ${log.plate}
+                            </div>
+                        </div>
+                        <div class="text-xs mt-2 text-slate-400 flex items-center">
+                            <i data-lucide="car" class="w-3 h-3 mr-1"></i> ${log.vehicle} 
+                            <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${log.status}</span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-medium text-slate-300">${log.time}</div>
+                        <div class="text-xs text-slate-500">${log.date}</div>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        // Export Log to TXT Document
+        exportBtn.addEventListener('click', () => {
+            if (logs.length === 0) {
+                alert("No logs to export!");
+                return;
+            }
+
+            let fileContent = "GATEKEEPER AI SECURITY LOG\n";
+            fileContent += "==============================================================\n";
+            fileContent += "DATE       | TIME       | PLATE      | TYPE       | STATUS    \n";
+            fileContent += "==============================================================\n";
+            
+            logs.forEach(log => {
+                const paddedDate = log.date.padEnd(10, ' ');
+                const paddedTime = log.time.padEnd(10, ' ');
+                const paddedPlate = log.plate.padEnd(10, ' ');
+                const paddedType = log.vehicle.substring(0, 10).padEnd(10, ' ');
+                fileContent += `${paddedDate} | ${paddedTime} | ${paddedPlate} | ${paddedType} | ${log.status}\n`;
+            });
+            
+            fileContent += "==============================================================\n";
+            fileContent += `Total: ${stats.total} | VIPs: ${stats.vip} | Threats: ${stats.threat}\n`;
+            fileContent += `Export Generated: ${new Date().toLocaleString()}\n`;
+
+            const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `security_log_ai_${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // Initialize
+        window.onload = () => {
+            startCamera();
+            loadAIModels(); // Start loading AI engine immediately
+        };
+
+    </script>
+</body>
+</html>
