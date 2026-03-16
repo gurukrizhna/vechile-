@@ -305,18 +305,17 @@
         }
 
         // --- NEW: Image Enhancement for OCR ---
-        // Converts the image to high-contrast black and white to remove glare and background noise
+        // Converts the image to grayscale to remove color noise without destroying text in shadows
         function preprocessForOCR(context, width, height) {
             let imageData = context.getImageData(0, 0, width, height);
             let data = imageData.data;
             for (let i = 0; i < data.length; i += 4) {
                 // Get grayscale value
                 let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                // Apply harsh threshold (makes text solid black, background solid white)
-                let threshold = avg > 110 ? 255 : 0; 
-                data[i] = threshold;     // Red
-                data[i + 1] = threshold; // Green
-                data[i + 2] = threshold; // Blue
+                // Apply grayscale (removed the harsh solid black/white threshold)
+                data[i] = avg;     // Red
+                data[i + 1] = avg; // Green
+                data[i + 2] = avg; // Blue
             }
             context.putImageData(imageData, 0, 0);
         }
@@ -411,79 +410,78 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            scanFeedback.textContent = "Looking for vehicles...";
+            scanFeedback.textContent = "Scanning target area...";
+            scanLine.style.display = 'block';
 
             try {
-                // Step 1: Detect if a vehicle is in frame
+                // Step 1: Detect vehicle type (Optional: Don't block OCR if no vehicle is found!)
+                let vehicleType = "Unknown";
                 const predictions = await vehicleModel.detect(canvas);
                 const vehicleClasses = ['car', 'truck', 'motorcycle', 'bus'];
                 const detectedVehicles = predictions.filter(p => vehicleClasses.includes(p.class));
 
                 if (detectedVehicles.length > 0) {
-                    scanFeedback.textContent = "Vehicle detected! Scanning target area...";
-                    scanLine.style.display = 'block';
-                    
-                    // Grab best prediction
                     detectedVehicles.sort((a, b) => b.score - a.score);
-                    const vClass = detectedVehicles[0].class;
-                    const vehicleType = vClass.charAt(0).toUpperCase() + vClass.slice(1);
+                    vehicleType = detectedVehicles[0].class.charAt(0).toUpperCase() + detectedVehicles[0].class.slice(1);
+                }
+
+                // Step 2: Crop to the UI Target Box area (Center 66% width, 33% height)
+                const targetWidth = canvas.width * 0.66;
+                const targetHeight = canvas.height * 0.33;
+                const targetX = (canvas.width - targetWidth) / 2;
+                const targetY = (canvas.height - targetHeight) / 2;
+
+                cropCanvas.width = targetWidth;
+                cropCanvas.height = targetHeight;
+                
+                // Draw ONLY the target box area onto the crop canvas
+                cropCtx.drawImage(canvas, targetX, targetY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
+                
+                // Apply grayscale filter
+                preprocessForOCR(cropCtx, targetWidth, targetHeight);
+
+                // Show the cropped frame in the UI
+                const processDataUrl = cropCanvas.toDataURL('image/jpeg', 1.0);
+                snapshotImg.src = processDataUrl;
+
+                // Step 3: ALWAYS run OCR on the cropped image (even if no car shape is detected)
+                const result = await Tesseract.recognize(
+                    processDataUrl,
+                    'eng',
+                    { tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' }
+                );
+
+                let detectedText = result.data.text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                
+                // Step 4: Validate Plate Format
+                // Must be 4-12 chars, containing at least one letter and one number
+                const hasLetters = /[A-Z]/.test(detectedText);
+                const hasNumbers = /[0-9]/.test(detectedText);
+                const isValidLength = detectedText.length >= 4 && detectedText.length <= 12;
+
+                if (isValidLength && hasLetters && hasNumbers) {
+                    const now = Date.now();
                     
-                    // --- NEW: STEP 2 - Crop to the UI Target Box area (Center 66% width, 33% height) ---
-                    const targetWidth = canvas.width * 0.66;
-                    const targetHeight = canvas.height * 0.33;
-                    const targetX = (canvas.width - targetWidth) / 2;
-                    const targetY = (canvas.height - targetHeight) / 2;
-
-                    cropCanvas.width = targetWidth;
-                    cropCanvas.height = targetHeight;
-                    
-                    // Draw ONLY the target box area onto the crop canvas
-                    cropCtx.drawImage(canvas, targetX, targetY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
-                    
-                    // Apply black and white contrast filter
-                    preprocessForOCR(cropCtx, targetWidth, targetHeight);
-
-                    // Show the cropped, high-contrast frame in the UI so the user sees exactly what the AI sees
-                    const processDataUrl = cropCanvas.toDataURL('image/jpeg', 1.0);
-                    snapshotImg.src = processDataUrl;
-
-                    // --- NEW: STEP 3 - Run OCR ONLY on the cropped, filtered image ---
-                    const result = await Tesseract.recognize(
-                        processDataUrl,
-                        'eng',
-                        { tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' }
-                    );
-
-                    let detectedText = result.data.text.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-                    
-                    // --- NEW: STEP 4 - Stricter Validation ---
-                    // Must be between 5 and 10 characters AND contain at least one number AND one letter
-                    const hasLetters = /[A-Z]/.test(detectedText);
-                    const hasNumbers = /[0-9]/.test(detectedText);
-                    const isValidLength = detectedText.length >= 5 && detectedText.length <= 10;
-
-                    if (isValidLength && hasLetters && hasNumbers) {
-                        const now = Date.now();
-                        
-                        // Check cooldown. Have we logged this exact plate recently?
-                        if (!recentScans[detectedText] || (now - recentScans[detectedText] > SCAN_COOLDOWN_MS)) {
-                            recentScans[detectedText] = now; // Update timestamp
-                            processAndLogEntry(detectedText, vehicleType);
-                        } else {
-                            scanFeedback.textContent = `Plate ${detectedText} already logged recently.`;
-                        }
+                    // Check cooldown
+                    if (!recentScans[detectedText] || (now - recentScans[detectedText] > SCAN_COOLDOWN_MS)) {
+                        recentScans[detectedText] = now; // Update timestamp
+                        processAndLogEntry(detectedText, vehicleType);
+                        scanFeedback.textContent = `Success! Logged: ${detectedText}`;
                     } else {
-                        scanFeedback.textContent = `No valid plate formatting found (${detectedText || 'Empty'}). Ensure plate is inside the box.`;
+                        scanFeedback.textContent = `Plate ${detectedText} already logged recently.`;
                     }
-                    scanLine.style.display = 'none';
+                } else {
+                    scanFeedback.textContent = `Scanning... (Found: ${detectedText || 'Noise'}). Keep plate in box.`;
                 }
             } catch (err) {
                 console.error("Auto-Scan Error:", err);
             }
 
-            // Loop again after 2 seconds to save CPU
+            scanLine.style.display = 'none';
+
+            // Loop again after 1.5 seconds (Faster response time)
             if (isAutoScanning) {
-                setTimeout(startAutoScanLoop, 2000);
+                setTimeout(startAutoScanLoop, 1500);
             }
         }
 
